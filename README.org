@@ -1,0 +1,165 @@
+rkt.el is a collection of definitions, aliases, and macros that teach Emacs how to understand Racket.
+
+This can be used customize Emacs with Racket or help convert existing Racket to run in Emacs.
+
+This was written to translate a specific program to Elisp.
+Browse the .rkt files from that project [[https://github.com/mschuldt/ga144/tree/master/src][here]] to see Racket code that has been
+converted to run in both the Racket and Elisp interpreters.
+Only the subset of features needed to get that project running in Elisp are supported here.
+
+The majority of functions are not implemented, and when they are they may still be missing
+optional parameters or may behave slightly differently for various reasons.
+Many features related to structs, classes, and looping constructs are not implemented.
+
+Macro expansion is slow,
+so for performance it is very important to byte compile any files that utilizes this code.
+
+* Running Racket code
+
+If the files only run as Elisp they may be loaded like normal,
+but if they are running as both Elisp and Racket then special functions
+are used to load the racket file. This handles Racket stuff like =#lang ...=.
+
+=(rkt-load FILE)= loads a .rkt filexo
+
+=(rkt-byte-compile FILE)= byte compile a .rkt file
+
+* Supported features
+** functions
+Functions support optional keywords and local scoping.
+
+This function:
+#+BEGIN_SRC racket
+  (define (func a (b 4))
+    (define v 1)
+    (define (f2 x) (+ x a))
+    (define f3 (lambda (x) (+ x b)))
+    (list v (f2 1) (f3 1) (b)))
+#+END_SRC
+is translated to:
+#+BEGIN_SRC emacs-lisp
+(defun func (a &optional b)
+    (setq b (or b 4))
+    (let (v f2 f3)
+      (setq v 1)
+      (setq f2 (lambda (x) (+ x a)))
+      (setq f3 (lambda (x) (+ x b)))
+      (list v (funcall f2 1) (funcall f3 1))))
+  (setq func 'func)
+#+END_SRC
+
+** structs
+the struct macro creates the =name= and =name?= functions for a struct with name =name=
+and creates the setter and getter functions =set-<name>-<field>!= and =<name>-<field>=.
+
+#+BEGIN_SRC racket
+  (struct address-cell (val next-addr name (type #:auto)) #:mutable #:transparent)
+#+END_SRC
+ in Elisp =#:auto=, =#:mutable=, and =#:transparent= are not needed. Everything becomes mutable and transparent.
+
+See structs in [[https://github.com/mschuldt/ga144/blob/master/src/common.rkt][common.rkt]]
+** classes
+Basic features supported.
+For large example classes see: [[https://github.com/mschuldt/ga144/blob/master/src/f18a.rkt][f18a.rkt]] and [[https://github.com/mschuldt/ga144/blob/master/src/ga144.rkt][ga144.rkt]]
+#+BEGIN_SRC racket
+  (class DemoObject$
+    (super-new)
+    (init-field a (b 1))
+    (define x (+ 1 a))
+    (define (get-a)
+      a)
+    (define/public (inc-a)
+      (set! a (+ (get-a) 1)))
+  )
+#+END_SRC
+
+** control flow
+- ~begin~,  ~cond~, ...
+- basic ~for~ and ~for/list~ features:
+#+BEGIN_SRC racket
+  (for/list ((op history)
+             (i (range 15)))
+    ...)
+#+END_SRC
+- ~if~ is Elisp styled (0 or more ELSE expressions)
+
+in-range
+
+** lists
+ - list?
+ - map
+ - null?
+ - cons?
+ - list->set
+ - string-join
+ - take
+** vectors
+ - vector-set!
+ - vector-ref
+ - vector-length
+ - vector?
+ - vector-map
+ - vector-append
+ - vector-copy
+ - list->vector
+ - vector->list
+ - vector-map!
+** hash tables
+ - make-hash
+ - hash-ref
+ - hash-set!
+ - hash-hash-key?
+ - hash->list
+ - hash-values
+ - hash-keys
+** sets
+ - list->liset
+ - make-set
+ - set-member?
+ - set->liset
+ - set-add
+** strings
+ - string?
+ - string-length
+ - string-append
+ - string->list
+ - string-ref
+ - list->string
+ - string->number
+** numbers
+ - add1
+ - sub1
+ - number?
+ - range
+ - quotient
+ - remainder
+ - modulo
+ - exact->inexact
+ - number->string
+ - zero?
+** bitwise
+ - bitwise-and
+ - bitwise-xor
+ - arithmetic-shift
+ - bitwise-ior
+ - bitwise-not
+ - bitwise-bit-field
+ - bitwise-bit-set?
+** mutable cons
+ - mcar
+ - set-mcar!
+ - set-mcdr!
+ - mcdr
+ - mcons
+ - mpair?
+** constants
+ false, true, void, eof
+
+ false and eof are defined as ~nil~
+
+** formatting and printing
+
+instead of =format=, use =rkt-format=.
+ It supports format options =~~=, =%s=, =~a=, and =~x=.
+
+~printf~ supports same format string type as ~rkt-format~
